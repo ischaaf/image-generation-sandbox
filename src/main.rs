@@ -1,11 +1,15 @@
-use colors::{transformers::{CheckerboardTF, SolidColorTransformer, ImageTransformer}, regions::{RegionFilter, NoF, MutliRegion, TriangleF, Polygon}};
+use regions::{NoF, Point, Polygon, RegionFilter};
+use transformers::{BlendedTessellationTF, ColorWaveTF, ImageTransformer, SolidColorTransformer};
 
-use crate::colors::{Image, Pixel};
+use crate::images::{Image, Pixel};
 
 const BASE_PATH: &str = "/mnt/c/Users/isaac/Pictures/patterns/";
 
+mod curves;
 mod image_writer;
-mod colors;
+mod images;
+mod regions;
+mod transformers;
 
 const fn rgb(r: u8, g: u8, b: u8) -> Pixel {
     Pixel::rgb(r, g, b)
@@ -16,26 +20,60 @@ const GREEN: Pixel = rgb(0, 0xff, 0);
 const BLUE: Pixel = rgb(0, 0, 0xff);
 
 fn main() {
+    let [c1, c2, c3, c4] = RED.luminate(0.3).set_alpha(0x44).tetradic();
     let mut image = Image::new(600, 800);
-    let tfs: Vec<(Box<dyn ImageTransformer>, Box<dyn RegionFilter>)> = vec![
-        (Box::new(SolidColorTransformer::new(Pixel::rgb(0xff, 0, 0x33))), Box::new(NoF{})),
-        (Box::new(CheckerboardTF::new(20, RED, BLUE)), Box::new(
-                MutliRegion::new(vec![
-                    Box::new(Polygon::square((0, 0), 99)),
-                    Box::new(Polygon::square((0, 700), 99)),
-                    Box::new(Polygon::square((500, 0), 99)),
-                    Box::new(Polygon::square((500, 700), 99)),
-                    // Box::new(TriangleF::new((200, 200), (200, 500), (300, 100))),
-                ])
-            )
+    let mut tfs: Vec<(Box<dyn ImageTransformer>, Box<dyn RegionFilter>)> = vec![
+        (
+            // Box::new(SolidColorTransformer::new(Pixel::rgb(0x00, 0x00, 0x00))),
+            Box::new(ColorWaveTF::new(
+                curves::linear_x(120.0, 300.0),
+                curves::constant(0.5),
+                curves::constant(0.5),
+            )),
+            Box::new(NoF {}),
+        ),
+        // (
+        //     Box::new(BlendedTessellationTF::new(
+        //         Polygon::hexagon,
+        //         Polygon::hexagon_center,
+        //         40,
+        //         &image.size.clone(),
+        //     )),
+        //     Box::new(NoF {}),
+        // ),
+        (
+            Box::new(BlendedTessellationTF::new(
+                Polygon::hexagon_rotated,
+                Polygon::hexagon_rotated_center,
+                40,
+                &image.size.clone(),
+            )),
+            Box::new(NoF {}),
+        ),
+        (
+            Box::new(SolidColorTransformer::new(Pixel::rgb(0, 0, 0))),
+            Box::new(Polygon::square(Point::new(299, 399), 2)),
         ),
     ];
 
-    for (i, (tf, r)) in tfs.iter().enumerate() {
-        image.transform_region(tf.as_ref(), r.as_ref());
-        println!("pixel val: {:?}, with u32: {:08x}", image.data[0], image.data[0].to_combined());
+    for (i, (tf, r)) in tfs.iter_mut().enumerate() {
+        image.transform_region(tf.as_mut(), r.as_ref());
         image.write(format!("{}/{:02}_output.png", BASE_PATH, i).as_str());
     }
+}
 
+fn test_pixel(r: u8, g: u8, b: u8, expected_h: f32, expected_s: f32, expected_l: f32) {
+    let pixel = Pixel::rgba(r, g, b, 1);
+    let (h, s, l, a) = pixel.to_hsla();
+    let recreated = Pixel::hsla(h, s, l, a);
 
+    println!(
+        "found   : rgb({}, {}, {}) -> hsl({}, {:.2}, {:.2}) -> rgb({}, {}, {})",
+        pixel.r, pixel.g, pixel.b, h, s, l, recreated.r, recreated.g, recreated.b
+    );
+    println!(
+        "expected: rgb({}, {}, {}) -> hsl({}, {}, {}) -> rgb({}, {}, {})",
+        r, g, b, expected_h, expected_s, expected_l, r, g, b
+    );
+    println!();
 }

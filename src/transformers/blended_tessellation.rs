@@ -1,77 +1,48 @@
-use std::collections::HashMap;
-
 use crate::{
     images::{Image, Pixel},
-    regions::{tess, Point, RegionFilter},
+    regions::{tess, Point, Region},
 };
-
-use super::ImageTransformer;
 
 pub struct BlendedTessellationTF {
     tessellation: tess::PolygonTessellation,
-    color_cache: HashMap<usize, Pixel>,
 }
 
 impl BlendedTessellationTF {
-    pub fn new(
-        make_polygon_fn: tess::MakePolygonFn,
-        center_fn: tess::CenterFn,
-        side_len: i32,
-        bounds: &Point,
-    ) -> Self {
-        let tessellation =
-            tess::PolygonTessellation::new(make_polygon_fn, center_fn, side_len, bounds);
-        Self {
-            tessellation,
-            color_cache: HashMap::new(),
-        }
+    pub fn new(tessellation: tess::PolygonTessellation) -> Self {
+        Self { tessellation }
     }
 }
 
-impl ImageTransformer for BlendedTessellationTF {
-    fn transform_pixel(&mut self, point: &Point, value: &Pixel, image: &Image) -> Pixel {
-        for (index, poly) in self.tessellation.polygons.iter().enumerate() {
-            if !poly.contains(point) {
+impl Region for BlendedTessellationTF {
+    fn get_mutations(&self, image: &Image, mutations: &mut Vec<(Point, Pixel)>) {
+        for polygon in self.tessellation.polygons.iter() {
+            let mut pixels_to_blend = vec![];
+            for point in polygon.iter_points() {
+                if image.contains(&point) {
+                    pixels_to_blend.push(image.get_pixel(&point));
+                }
+            }
+
+            if pixels_to_blend.len() == 0 {
                 continue;
             }
-            if let Some(pixel) = self.color_cache.get(&index) {
-                return pixel.clone();
-            } else {
-                let bbox = &poly.bounding_box;
-                let mut pixels_to_blind: Vec<Pixel> = vec![];
-                for x in bbox.origin.x..(bbox.origin.x + bbox.size.x) {
-                    if x < 0 || x >= image.size.x {
-                        continue;
-                    }
-                    for y in bbox.origin.y..(bbox.origin.y + bbox.size.y) {
-                        if y < 0 || y >= image.size.y {
-                            continue;
-                        }
-                        let point_to_blend = Point::new(x as i32, y as i32);
-                        if poly.contains(&point_to_blend) {
-                            pixels_to_blind.push(image.get_pixel(&point_to_blend).clone());
-                        }
-                    }
-                }
 
-                let mut alpha: u8 = (255 / pixels_to_blind.len()) as u8;
-                if alpha == 0 {
-                    alpha = 1;
-                }
-                let alpha = alpha;
-
-                let mut result = pixels_to_blind[0].clone().set_alpha(alpha);
-                for pixel_to_blind in pixels_to_blind.iter().skip(1) {
-                    result = result.blend(&pixel_to_blind.clone().set_alpha(alpha));
-                }
-                let to_ret = result.clone();
-                self.color_cache.insert(index, result);
-                return to_ret;
+            let mut alpha: u8 = (255 / pixels_to_blend.len()) as u8;
+            if alpha == 0 {
+                alpha = 1;
             }
-            // if hex.contains(point) {
-            //     return value.clone().blend(color);
-            // }
+            let alpha = alpha;
+
+            let mut blended_pixel = pixels_to_blend[0].clone().set_alpha(alpha);
+            for pixel_to_blind in pixels_to_blend.iter().skip(1) {
+                blended_pixel = blended_pixel.blend(&pixel_to_blind.clone().set_alpha(alpha));
+            }
+
+            for point in polygon.iter_points() {
+                if image.contains(&point) {
+                    mutations.push((point, blended_pixel.clone()));
+                }
+            }
         }
-        value.clone()
     }
 }

@@ -1,10 +1,8 @@
 use crate::{
     curves::CurveFn,
     images::{Image, Pixel},
-    regions::Point,
+    regions::{Point, Region},
 };
-
-use super::ImageTransformer;
 
 pub struct ColorWaveTF {
     hue_fn: CurveFn,
@@ -22,11 +20,17 @@ impl ColorWaveTF {
     }
 }
 
-impl ImageTransformer for ColorWaveTF {
-    fn transform_pixel(&mut self, point: &Point, _value: &Pixel, image: &Image) -> Pixel {
-        let hue = (self.hue_fn)(point, &image.size);
-        let sat = (self.sat_fn)(point, &image.size);
-        let lum = (self.lum_fn)(point, &image.size);
-        Pixel::hsla(hue, sat, lum, 0xff)
+impl Region for ColorWaveTF {
+    fn get_mutations(&self, image: &Image, mutations: &mut Vec<(Point, Pixel)>) {
+        for x in 0..image.size.x {
+            for y in 0..image.size.y {
+                let point = Point::new(x, y);
+                let hue = (self.hue_fn)(&point, &image.size);
+                let sat = (self.sat_fn)(&point, &image.size);
+                let lum = (self.lum_fn)(&point, &image.size);
+                let pixel = Pixel::hsla(hue, sat, lum, 0xff);
+                mutations.push((point, pixel));
+            }
+        }
     }
 }

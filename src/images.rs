@@ -1,7 +1,8 @@
+use std::collections::HashSet;
+
 use crate::image_writer::write;
 
-use crate::regions::{NoF, Point, RegionFilter};
-use crate::transformers::ImageTransformer;
+use crate::regions::{Point, Rectangle, Region};
 
 const R_SHIFT: u32 = 0;
 const G_SHIFT: u32 = 8;
@@ -78,11 +79,6 @@ impl Pixel {
         let g = Self::convert_temp_to_rgb(t_g, t1, t2);
         let b = Self::convert_temp_to_rgb(t_b, t1, t2);
 
-        // println!("t_1: {}", t1);
-        // println!("t_2: {}", t2);
-        // println!("t_r: {}", t_r);
-        // println!("t_g: {}", t_g);
-        // println!("t_b: {}", t_b);
         Self::rgba(r, g, b, a)
     }
 
@@ -191,6 +187,7 @@ impl Pixel {
 
     pub fn blend(mut self, other: &Pixel) -> Self {
         let a = 255 - ((255 - self.a as u32) * (255 - other.a as u32) / 255) as u8;
+
         self.r = ((self.r as u32 * (255 - other.a as u32) + other.r as u32 * other.a as u32) / 255)
             as u8;
         self.g = ((self.g as u32 * (255 - other.a as u32) + other.g as u32 * other.a as u32) / 255)
@@ -201,9 +198,21 @@ impl Pixel {
 
         self
     }
+
+    pub fn blend_multiple_no_alpha(pixels: &[&Pixel]) -> Pixel {
+        let a_per = 255 / pixels.len() as u32;
+        let mut result = Pixel::new();
+        for pixel in pixels {
+            result.r = (pixel.r as u32 * a_per) as u8;
+            result.g = (pixel.g as u32 * a_per) as u8;
+            result.b = (pixel.b as u32 * a_per) as u8;
+        }
+        result.set_alpha(0xff)
+    }
 }
 
 pub struct Image {
+    bounds: Rectangle,
     pub size: Point,
     pub data: Vec<Pixel>,
 }
@@ -211,10 +220,8 @@ pub struct Image {
 impl Image {
     pub fn new(width: i32, height: i32) -> Self {
         Self {
-            size: Point {
-                x: width,
-                y: height,
-            },
+            bounds: Rectangle::normal(Point::new(width, height)),
+            size: Point::new(width, height),
             data: vec![Pixel::new(); (width * height) as usize],
         }
     }
@@ -232,26 +239,22 @@ impl Image {
         write(name, output_data, self.size.x as u32, self.size.y as u32);
     }
 
-    pub fn transform(&mut self, transformer: &mut dyn ImageTransformer) -> &mut Self {
-        self.transform_region(transformer, &NoF {})
+    pub fn contains(&self, point: &Point) -> bool {
+        self.bounds.contains(point)
     }
 
-    pub fn transform_region(
-        &mut self,
-        transformer: &mut dyn ImageTransformer,
-        region: &dyn RegionFilter,
-    ) -> &mut Self {
-        let mut modifications: Vec<(usize, Pixel)> = vec![];
-        for (index, pixel) in self.data.iter().enumerate() {
-            let point = Point::from_linear(index as i32, self.size.x);
-            if region.contains(&point) {
-                modifications.push((index, transformer.transform_pixel(&point, pixel, &self)));
+    pub fn apply_region(&mut self, region: &dyn Region) {
+        let dup_color = Pixel::rgba(0, 0, 0, 0xff);
+        let mut all_points: HashSet<Point> = HashSet::new();
+        let mut mutations: Vec<(Point, Pixel)> = Vec::new();
+        region.get_mutations(self, &mut mutations);
+        for (point, pixel) in mutations {
+            if all_points.contains(&point) {
+                self.data[point.to_linear(self.size.x) as usize].copy_from(&dup_color);
+            } else {
+                all_points.insert(point.clone());
+                self.data[point.to_linear(self.size.x) as usize].copy_from(&pixel);
             }
         }
-
-        for (index, new_pixel) in modifications {
-            self.data[index].copy_from(&new_pixel);
-        }
-        self
     }
 }

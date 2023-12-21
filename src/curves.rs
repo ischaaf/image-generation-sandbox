@@ -2,9 +2,9 @@ use crate::regions::Point;
 
 pub type CurveFn = Box<dyn Fn(&Point, &Point) -> f32>;
 
-fn apply_ratio(x: f32, d_max: f32, r_min: f32, r_max: f32) -> f32 {
+fn apply_ratio(x: f32, d_max: f32, r_start: f32, r_end: f32) -> f32 {
     let ratio = 1.0 - (d_max - x) / d_max;
-    (r_max - r_min) * ratio + r_min
+    (r_end - r_start) * ratio + r_start
 }
 
 pub fn constant(val: f32) -> CurveFn {

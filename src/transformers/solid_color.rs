@@ -1,22 +1,23 @@
 use crate::{
     images::{Image, Pixel},
-    regions::Point,
+    regions::{Point, Polygon, Region},
 };
 
-use super::ImageTransformer;
-
-pub struct SolidColorTransformer {
+pub struct SolidColorPolygon {
+    polygon: Polygon,
     color: Pixel,
 }
 
-impl SolidColorTransformer {
-    pub fn new(color: Pixel) -> Self {
-        Self { color }
+impl SolidColorPolygon {
+    pub fn new(polygon: Polygon, color: Pixel) -> Self {
+        Self { polygon, color }
     }
 }
 
-impl ImageTransformer for SolidColorTransformer {
-    fn transform_pixel(&mut self, _point: &Point, value: &Pixel, _image: &Image) -> Pixel {
-        self.color.clone()
+impl Region for SolidColorPolygon {
+    fn get_mutations(&self, image: &Image, mutations: &mut Vec<(Point, Pixel)>) {
+        for point in self.polygon.iter_points() {
+            mutations.push((point, self.color.clone()));
+        }
     }
 }

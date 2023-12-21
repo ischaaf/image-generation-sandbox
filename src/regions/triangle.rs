@@ -1,11 +1,12 @@
 use std::fmt::Debug;
 
 use super::{
-    point::{Point, PointFloat},
+    point::{Point, PointAnnotation, PointFloat},
     Rectangle,
 };
 
 const DISABLE_SKIP: bool = false;
+const ANNOTATE: bool = true;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Orientation {
@@ -178,15 +179,12 @@ pub struct StandardTriangleIterator<'a> {
     cur_left: PointFloat,
     cur_right: PointFloat,
     cur_point: Point,
+    cur_annotation: PointAnnotation,
     done: bool,
 }
 
 impl<'a> StandardTriangleIterator<'a> {
     fn new(triangle: &'a StandardTriangle) -> Self {
-        println!(
-            "iterating points in triangle: {:?}, {:?}, {:?}",
-            triangle.p1, triangle.p2, triangle.p3
-        );
         let transposed_triange = triangle.transpose();
 
         let p3_f = transposed_triange.p3.to_float();
@@ -202,6 +200,7 @@ impl<'a> StandardTriangleIterator<'a> {
             cur_left,
             cur_right,
             cur_point,
+            cur_annotation: PointAnnotation::FullEdge,
             done: false,
         };
 
@@ -210,22 +209,72 @@ impl<'a> StandardTriangleIterator<'a> {
         result
     }
 
+    fn is_bot(&self) -> bool {
+        self.cur_point.y == self.transposed_triange.p1.y
+    }
+
+    fn is_top(&self) -> bool {
+        self.cur_point.y == self.transposed_triange.p3.y
+    }
+
     fn fast_forward_to_start(&mut self) {
+        if ANNOTATE {
+            self.advance_x(true);
+            return;
+        }
         if self.skip_bot() {
             self.advance_y();
         } else if self.skip_left() {
-            self.advance_x();
+            self.advance_x(false);
         }
     }
 
-    fn advance_x(&mut self) {
+    fn advance_x(&mut self, allow_adv_y: bool) {
         self.cur_point.x += 1;
-        let skip = match self.skip_right() {
-            false => 0.0,
-            true => -1.0,
-        };
-        if self.cur_point.x as f32 > (self.cur_right.x.round() + skip) {
-            self.advance_y();
+        let bound;
+        if ANNOTATE {
+            bound = self.cur_right.x.round();
+            if self.is_bot() {
+                if self.skip_bot() {
+                    self.cur_annotation = PointAnnotation::FullEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                } else {
+                    self.cur_annotation = PointAnnotation::StandardEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                }
+            } else if self.is_top() {
+                if self.skip_top() {
+                    self.cur_annotation = PointAnnotation::FullEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                } else {
+                    self.cur_annotation = PointAnnotation::StandardEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                }
+            } else if self.cur_point.x == bound as i32 {
+                if self.skip_right() {
+                    self.cur_annotation = PointAnnotation::FullEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                } else {
+                    self.cur_annotation = PointAnnotation::StandardEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                }
+            } else {
+                self.cur_annotation = PointAnnotation::Regular;
+                println!("Setting annotation to {:?}", self.cur_annotation);
+            }
+        } else {
+            bound = match self.skip_right() {
+                false => self.cur_right.x.round(),
+                true => self.cur_right.x.round() - 1.0,
+            };
+        }
+
+        if self.cur_point.x as f32 > bound {
+            if allow_adv_y {
+                self.advance_y();
+            } else {
+                self.done = true;
+            }
         }
     }
 
@@ -237,16 +286,50 @@ impl<'a> StandardTriangleIterator<'a> {
         self.cur_right.x -= self.inv_slope_right;
 
         self.cur_point = self.cur_left.round();
-        if self.skip_left() {
-            self.cur_point.x += 1;
+
+        let bound;
+        if ANNOTATE {
+            bound = self.cur_right.x;
+            if self.is_bot() {
+                if self.skip_bot() {
+                    self.cur_annotation = PointAnnotation::FullEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                } else {
+                    self.cur_annotation = PointAnnotation::StandardEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                }
+            } else if self.is_top() {
+                if self.skip_top() {
+                    self.cur_annotation = PointAnnotation::FullEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                } else {
+                    self.cur_annotation = PointAnnotation::StandardEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                }
+            } else {
+                if self.skip_left() {
+                    self.cur_annotation = PointAnnotation::FullEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                } else {
+                    self.cur_annotation = PointAnnotation::StandardEdge;
+                    println!("Setting annotation to {:?}", self.cur_annotation);
+                }
+            }
+        } else {
+            bound = match self.skip_top() {
+                false => self.cur_right.x,
+                true => self.cur_right.x - 1.0,
+            };
         }
 
-        let skip = match self.skip_top() {
-            false => 0.0,
-            true => -1.0,
-        };
-        if self.cur_left.x > (self.cur_right.x + skip) {
+        if self.cur_left.x > bound {
             self.done = true;
+        }
+
+        if ANNOTATE {
+            if self.skip_left() {
+                self.advance_x(false);
+            }
         }
     }
 
@@ -306,10 +389,13 @@ impl<'a> Iterator for StandardTriangleIterator<'a> {
             return None;
         }
 
-        let result = self.transposed_triange.untranspose(self.cur_point.clone());
-        println!("Point iter found: {:?}", result);
-        self.advance_x();
+        let result = self
+            .transposed_triange
+            .untranspose(self.cur_point.clone())
+            .annotate(self.cur_annotation.clone());
+        self.advance_x(true);
 
+        println!("returning point with annotation: {:?}", self.cur_annotation);
         Some(result)
     }
 }
@@ -406,6 +492,14 @@ impl Triangle {
         (self.t1, self.t2)
     }
 
+    pub fn to_triangle_vec(self) -> Vec<StandardTriangle> {
+        let mut result = vec![self.t1];
+        if let Some(t2) = self.t2 {
+            result.push(t2);
+        }
+        result
+    }
+
     pub fn iter_points<'a>(&'a self) -> TriangleIterator<'a> {
         TriangleIterator::new(self)
     }
@@ -431,16 +525,13 @@ impl<'a> Iterator for TriangleIterator<'a> {
     type Item = Point;
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(next_val) = self.cur_iter.next() {
-            println!("Point iter found: {:?}", next_val);
             return Some(next_val);
         }
-        println!("Point iter finished iterator: on_t2={:?}", self.on_t2);
         if !self.on_t2 {
             self.on_t2 = true;
             if let Some(t2) = &self.triangle.t2 {
                 self.cur_iter = t2.iter_points();
                 if let Some(next_val) = self.cur_iter.next() {
-                    println!("Point iter found: {:?}", next_val);
                     return Some(next_val);
                 }
             }

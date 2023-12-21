@@ -2,25 +2,43 @@ use std::fmt::Debug;
 
 const ORIGIN: Point = Point::new(0, 0);
 
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+pub enum PointAnnotation {
+    Regular,
+    FullEdge,
+    StandardEdge,
+}
+
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Point {
     pub x: i32,
     pub y: i32,
+    pub annotation: PointAnnotation,
 }
 
 impl Point {
     pub const fn new(x: i32, y: i32) -> Self {
-        Self { x, y }
+        Self {
+            x,
+            y,
+            annotation: PointAnnotation::Regular,
+        }
     }
 
     pub fn to_linear(&self, max_x: i32) -> i32 {
         self.y * max_x + self.x
     }
 
+    pub fn annotate(mut self, annotation: PointAnnotation) -> Self {
+        self.annotation = annotation;
+        self
+    }
+
     pub fn from_linear(value: i32, max_x: i32) -> Self {
         Self {
             x: value % max_x,
             y: value / max_x,
+            annotation: PointAnnotation::Regular,
         }
     }
 

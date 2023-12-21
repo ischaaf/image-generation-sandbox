@@ -45,7 +45,6 @@ impl Polygon {
     }
 
     pub fn iter_points(&self) -> PolygonIterator {
-        println!("iterating through polygon");
         let cur_rect_iterator;
         if self.rectangles.len() > 0 {
             cur_rect_iterator = Some(self.rectangles[0].iter_points());
@@ -84,7 +83,6 @@ impl<'a> Iterator for PolygonIterator<'a> {
         if let Some(rect_iter) = &mut self.cur_rect_iterator {
             let rect_result = rect_iter.next();
             if let Some(result) = rect_result {
-                println!("Found: {:?} using rectangle", result);
                 return Some(result);
             } else {
                 loop {
@@ -93,7 +91,6 @@ impl<'a> Iterator for PolygonIterator<'a> {
                         let mut iter = self.polygon.rectangles[self.cur_rect_index].iter_points();
                         if let Some(result) = iter.next() {
                             self.cur_rect_iterator = Some(iter);
-                            println!("Found: {:?} using rectangle", result);
                             return Some(result);
                         }
                     } else {
@@ -107,7 +104,6 @@ impl<'a> Iterator for PolygonIterator<'a> {
         if let Some(tri_iter) = &mut self.cur_tri_iterator {
             let tri_result = tri_iter.next();
             if let Some(result) = tri_result {
-                println!("Found: {:?} using triangle", result);
                 return Some(result);
             } else {
                 loop {
@@ -116,7 +112,6 @@ impl<'a> Iterator for PolygonIterator<'a> {
                         let mut iter = self.polygon.triangles[self.cur_tri_index].iter_points();
                         if let Some(result) = iter.next() {
                             self.cur_tri_iterator = Some(iter);
-                            println!("Found: {:?} using triangle", result);
                             return Some(result);
                         }
                     } else {
@@ -128,5 +123,17 @@ impl<'a> Iterator for PolygonIterator<'a> {
         }
 
         None
+    }
+}
+
+impl From<Triangle> for Polygon {
+    fn from(triangle: Triangle) -> Self {
+        Self::from_shapes(triangle.to_triangle_vec(), vec![])
+    }
+}
+
+impl From<Rectangle> for Polygon {
+    fn from(rectangle: Rectangle) -> Self {
+        Self::from_shapes(vec![], vec![rectangle])
     }
 }

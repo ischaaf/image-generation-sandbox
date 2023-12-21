@@ -57,6 +57,11 @@ impl Pixel {
         }
     }
 
+    pub fn hue_shift(&self, value: f32) -> Self {
+        let (h, s, l, a) = self.to_hsla();
+        Self::hsla(Self::ensure_0_to_x(h + value, 360.0), s, l, a)
+    }
+
     pub fn hsla(h: f32, s: f32, l: f32, a: u8) -> Self {
         if s <= 0f32 + f32::EPSILON {
             let val = (l * 255f32) as u8;
@@ -80,6 +85,14 @@ impl Pixel {
         let b = Self::convert_temp_to_rgb(t_b, t1, t2);
 
         Self::rgba(r, g, b, a)
+    }
+
+    pub fn hsl(h: f32, s: f32, l: f32) -> Self {
+        Self::hsla(h, s, l, 0xff)
+    }
+
+    pub fn hue(h: f32) -> Self {
+        Self::hsla(h, 1.0, 0.5, 0xff)
     }
 
     pub fn to_hsla(&self) -> (f32, f32, f32, u8) {

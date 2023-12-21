@@ -6,7 +6,7 @@ mod triangle;
 
 pub const ROOT_3: f64 = 1.732;
 
-pub use point::Point;
+pub use point::{Point, PointAnnotation};
 pub use polygon::Polygon;
 pub use rectangle::{Rectangle, RectangleIterator};
 pub use triangle::{Orientation, StandardTriangle, StandardTriangleIterator, Triangle};

@@ -1,6 +1,6 @@
 use crate::{
     images::{Image, Pixel},
-    regions::{tess, Point, Region},
+    regions::{tess, Point, PointAnnotation, Region},
 };
 
 pub struct ColoredTessellationTF {
@@ -31,6 +31,9 @@ impl Region for ColoredTessellationTF {
         if self.tessellation.polygons.len() == 0 {
             return;
         }
+        let full_bound_color = Pixel::hsl(120.0, 1.0, 0.5); // green
+        let standard_bound_color = Pixel::hsl(240.0, 1.0, 0.5); // blue
+
         let mut last_y = self.tessellation.polygons[0].bounds().origin.y;
         let mut color_index = 0;
         let mut last_start = 0;
@@ -52,7 +55,16 @@ impl Region for ColoredTessellationTF {
                     continue;
                 }
                 if self.use_descrete_colors {
-                    mutations.push((point, self.colors[index].clone()));
+                    let color = match point.annotation {
+                        PointAnnotation::Regular => self.colors[index].clone(),
+                        PointAnnotation::StandardEdge => self.colors[index].clone().hue_shift(0.0),
+                        PointAnnotation::FullEdge => self.colors[index].clone().hue_shift(0.0),
+                    };
+                    match point.annotation {
+                        PointAnnotation::Regular => mutations.push((point, color)),
+                        PointAnnotation::StandardEdge => mutations.push((point, color)),
+                        PointAnnotation::FullEdge => mutations.push((point, color)),
+                    }
                 } else {
                     mutations.push((point, self.colors[color_index].clone()));
                 }
